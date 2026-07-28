@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Project data / artifacts
+data/audio/
+data/musicxml/
+data/*.sqlite
+data/*.db
+*.wav
+*.mp3
+*.flac
+*.mid
+*.midi
+*.musicxml
+!tests/**/*.mid          # keep any tiny test fixtures if added
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.env

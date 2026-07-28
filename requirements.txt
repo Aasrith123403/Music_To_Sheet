@@ -1,0 +1,28 @@
+# --- Core pipeline ---
+basic-pitch>=0.3.0      # neural piano transcription (audio -> note events)
+librosa>=0.10.1         # audio I/O, beat tracking, pitch/frequency utils
+music21>=9.1.0          # score model + MusicXML export
+mir_eval>=0.7           # transcription metrics (onset / onset+offset F1)
+numpy>=1.24,<2.0        # array math (pinned <2 for basic-pitch/tensorflow compat)
+scipy>=1.10             # used by spelling (correlation) and misc DSP
+pretty_midi>=0.2.10     # load MAESTRO ground-truth MIDI for the eval harness
+
+# --- API / jobs ---
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9  # file uploads for FastAPI
+yt-dlp>=2024.1.0         # fetch audio from YouTube URLs (needs ffmpeg on PATH)
+pymupdf>=1.24.0          # render PDF sheet-music pages to images for OMR
+bcrypt>=4.0.0            # password hashing for accounts
+httpx>=0.27.0            # Google OAuth (token exchange + userinfo)
+python-dotenv>=1.0.0     # load .env into the environment at startup
+# oemer>=0.1.7           # optional: optical music recognition (PDF/image sheet input)
+
+# --- Optional, torch-backed (heavy but a large accuracy/feature win) ---
+# torch>=2.0                          # required by both below
+# piano_transcription_inference>=0.0.6  # far better piano transcription
+# demucs>=4.0                         # stem separation
+# setuptools                          # basic-pitch needs pkg_resources
+
+# --- Dev / test ---
+pytest>=8.0.0

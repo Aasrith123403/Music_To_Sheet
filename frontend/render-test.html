@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OSMD render check</title>
+    <script src="./node_modules/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script>
+  </head>
+  <body>
+    <div id="score"></div>
+    <script>
+      (async () => {
+        const xml = await (await fetch("./public/demo.musicxml", { cache: "no-store" })).text();
+        const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("score", {
+          autoResize: true,
+          drawTitle: true,
+          drawPartNames: false,
+        });
+        await osmd.load(xml);
+        osmd.render();
+        document.title = "OSMD render OK";
+      })();
+    </script>
+  </body>
+</html>
