@@ -28,3 +28,4 @@ data/*.db
 .idea/
 .vscode/
 .env
+.env
