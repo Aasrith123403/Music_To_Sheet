@@ -464,3 +464,11 @@ def get_audio(job_id: str, user: auth.User | None = Depends(auth.current_user)) 
     if not path.exists():
         raise HTTPException(status_code=404, detail="No offline audio (fluidsynth unavailable)")
     return FileResponse(path, media_type="audio/wav", filename=f"{job_id}.wav")
+
+
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+_frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
