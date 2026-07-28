@@ -26,3 +26,4 @@ python-dotenv>=1.0.0     # load .env into the environment at startup
 
 # --- Dev / test ---
 pytest>=8.0.0
+scipy>=1.10,<1.13
