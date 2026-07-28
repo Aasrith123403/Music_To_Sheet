@@ -21,7 +21,7 @@ dependencies = [
 transcribe = ["basic-pitch>=0.3.0"]
 api = [
     "fastapi>=0.111.0", "uvicorn[standard]>=0.30.0",
-    "python-multipart>=0.0.9", "yt-dlp>=2024.1.0",
+    "python-multipart>=0.0.9",
     "pretty_midi>=0.2.10", "pymupdf>=1.24.0",
     "bcrypt>=4.0.0",   # password hashing
     "httpx>=0.27.0",   # Google OAuth token/userinfo calls
@@ -29,11 +29,9 @@ api = [
 ]
 eval = ["pretty_midi>=0.2.10"]
 omr = ["oemer>=0.1.7"]  # optical music recognition for PDF/image sheet input
-# Torch-backed extras. Heavy (~2.5 GB) but they unlock the two biggest wins:
-#   piano  -> a piano-specific transcription model, far more accurate than basic-pitch
-#   stems  -> Demucs source separation
+# Torch-backed extra: a piano-specific transcription model, far more accurate
+# than basic-pitch (~2.5 GB with torch).
 piano = ["torch>=2.0", "piano_transcription_inference>=0.0.6", "setuptools"]
-stems = ["torch>=2.0", "torchaudio", "demucs>=4.0"]
 dev = ["pytest>=8.0.0", "pretty_midi>=0.2.10", "pymupdf>=1.24.0"]
 
 [project.scripts]

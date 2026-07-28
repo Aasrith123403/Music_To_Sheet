@@ -1,7 +1,6 @@
 # Audio → Sheet Music
 
-Upload a single-instrument recording (or paste a YouTube link), get back
-readable sheet music — with a measurable claim about *how* readable it is, plus
+Upload a single-instrument recording, get back readable sheet music — with a measurable claim about *how* readable it is, plus
 an analysis of what was played.
 
 **Scope constraint (the thing that makes it finishable):** one instrument per
@@ -17,9 +16,6 @@ range, and transposition.
 - **Chords** — simultaneous notes are grouped into chords (left-hand block
   chords read as chords, not a pile of overlapping noteheads), and a cost-based
   Viterbi assigns each note to a hand instead of a hard middle-C split.
-- **YouTube** — paste a URL; audio is fetched with yt-dlp for *private study*.
-  A transcribability gate declines clips that won't notate well (too long, too
-  few notes, too dense a mix). Don't publish generated scores of copyrighted music.
 - **Sheet → Audio (reverse)** — upload notation and hear it played in a chosen
   instrument. MusicXML/MIDI play back exactly; PDF/image go through optical
   music recognition (OMR, `oemer`) — best-effort, accuracy depends on the scan.
@@ -36,17 +32,15 @@ range, and transposition.
 - **Interactive score** — click any notehead to hear it, step through with
   Prev/Next, and switch on *Follow the score* so a cursor tracks the audio and
   scrolls the page as it plays.
-- **Learn** — a note-reading trainer on real engraved staves (answer with the
-  letter keys, hear each note), an interval ear-trainer, a playable keyboard,
-  a symbol reference, a clickable circle-of-fifths that plays each scale, and a
-  1–5 reading-difficulty rating on every piece.
+- **Learn** — nine sections for actually learning the piano: a note-reading
+  trainer on real engraved staves (answer with the letter keys), **scales with
+  standard piano fingering** for every key, a **metronome** with accented
+  downbeats, **chord** and **interval** ear-training, a playable keyboard, a
+  symbol reference, a clickable circle-of-fifths that plays each scale, and a
+  practice guide. Every piece also gets a 1–5 reading-difficulty rating.
 - **Chords** — build any chord from a root/quality/inversion (engraved, spelled
   and played), stack notes on a keyboard to find out what you've invented, and
   browse the chords and stock progressions of any key.
-- **Stems** — split a mix into parts (drums, bass, vocals, and with the 6-stem
-  model piano and guitar) with Demucs, for sampling or to isolate an instrument
-  before transcribing it. Runs locally; stems the track doesn't contain come
-  back flagged as silent.
 - **Readability metrics** — three tiers (below), the point of the project.
 
 ## Transcription models
@@ -123,11 +117,12 @@ piano_transcribe/     the pipeline library
   quality.py          transcribability gate
   importscore.py      sheet music → music21 Score (MusicXML/MIDI; PDF/image OMR)
   synthesize.py       Score → MIDI (instrument) + analysis   (reverse direction)
-  learn.py            note-reading quiz, difficulty rating, key reference
+  learn.py            note quiz, scales + fingering, difficulty, key reference
+  chords.py           chord building, identification, keys and progressions
   evaluate.py         mir_eval metrics (three tiers) + notation fidelity
   pipeline.py         end-to-end orchestration
 api/                  FastAPI: accounts, jobs, library, learning
-  main.py db.py jobs.py youtube.py auth.py google_oauth.py
+  main.py db.py jobs.py auth.py google_oauth.py config.py
 cli/run_eval.py       score a MAESTRO subset, print/write a metrics table
 cli/bench_quantize.py rhythm benchmark for the notation layer (no dataset)
 frontend/             React + Vite + OSMD
@@ -171,9 +166,8 @@ sight-read the output.
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"          # library + pytest
 pip install -e ".[transcribe]"   # add basic-pitch (pulls in TensorFlow)
-pip install -e ".[api]"          # FastAPI + uvicorn + yt-dlp + pymupdf
+pip install -e ".[api]"          # FastAPI + uvicorn + pymupdf
 pip install -e ".[omr]"          # optional: oemer, for PDF/image sheet input
-# ffmpeg      — for YouTube audio extraction        (brew install ffmpeg)
 # fluidsynth  — for offline Sheet→Audio playback    (brew install fluid-synth)
 ```
 
@@ -202,7 +196,7 @@ own `.sf2`.
 ## Run
 
 ```bash
-pytest                                   # 94 tests, incl. self-scoring F1 == 1.0
+pytest                                   # 143 tests, incl. self-scoring F1 == 1.0
 uvicorn api.main:app --reload            # API at http://127.0.0.1:8000/docs
 
 # frontend (needs the API running; proxies /jobs + /instruments -> :8000)

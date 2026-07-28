@@ -5,9 +5,8 @@ request thread. This uses a thread-backed executor — simple, in-process, good
 enough for a single-box demo. Swap ``submit_*`` for a Celery task when you need
 multiple workers or restart durability; the DB rows are the queue either way.
 
-Two job kinds share one runner: uploaded files and YouTube URLs. A YouTube job
-first probes duration (declining over-long clips before download), fetches the
-audio, then joins the same pipeline path.
+Two job kinds share one runner: transcribing an uploaded recording, and
+synthesizing uploaded sheet music back to audio.
 """
 
 from __future__ import annotations
@@ -17,12 +16,11 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from piano_transcribe import quality
 from piano_transcribe.importscore import ScoreImportError
 from piano_transcribe.pipeline import Rejected, run_pipeline
 from piano_transcribe.synthesize import midi_to_wav, synthesize
 
-from . import db, youtube
+from . import db
 
 # Single background worker; raise max_workers for parallel jobs (mind the RAM
 # cost of multiple TensorFlow sessions).
@@ -31,17 +29,11 @@ _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="transcribe")
 MUSICXML_DIR = db.DATA_DIR / "musicxml"
 AUDIO_DIR = db.DATA_DIR / "audio"
 MIDI_DIR = db.DATA_DIR / "midi"
-STEMS_DIR = db.DATA_DIR / "stems"
 
 
 def submit_file_job(job_id: str, audio_path: str, instrument: str, title: str) -> None:
     """Queue a pipeline run for an already-saved audio file."""
     _executor.submit(_run_file, job_id, audio_path, instrument, title)
-
-
-def submit_youtube_job(job_id: str, url: str, instrument: str) -> None:
-    """Queue a fetch-then-transcribe run for a YouTube URL."""
-    _executor.submit(_run_youtube, job_id, url, instrument)
 
 
 def _run_pipeline_into_db(job_id: str, audio_path: str, instrument: str, title: str) -> None:
@@ -72,38 +64,6 @@ def _run_file(job_id: str, audio_path: str, instrument: str, title: str) -> None
                       error=f"{exc}\n{traceback.format_exc()}")
 
 
-def submit_stems_job(job_id: str, audio_path: str, model: str) -> None:
-    """Queue a source-separation run."""
-    _executor.submit(_run_stems, job_id, audio_path, model)
-
-
-def _run_stems(job_id: str, audio_path: str, model: str) -> None:
-    from piano_transcribe import stems as stems_mod
-
-    db.update_job(job_id, status=db.STATUS_RUNNING)
-    try:
-        out_dir = STEMS_DIR / job_id
-        results = stems_mod.separate(audio_path, out_dir, model=model)
-        summary = {
-            "model": model,
-            "stems": [
-                {"name": r.name, **stems_mod.stem_summary(r.path)}
-                for r in results
-            ],
-        }
-        db.update_job(
-            job_id,
-            status=db.STATUS_DONE,
-            stems_dir=str(out_dir),
-            analysis=json.dumps(summary),
-        )
-    except stems_mod.StemError as exc:
-        db.update_job(job_id, status=db.STATUS_REJECTED, error=str(exc))
-    except Exception as exc:  # noqa: BLE001
-        db.update_job(job_id, status=db.STATUS_FAILED,
-                      error=f"{exc}\n{traceback.format_exc()}")
-
-
 def submit_synthesize_job(job_id: str, sheet_path: str, instrument: str) -> None:
     """Queue a sheet-music -> MIDI synthesis run."""
     _executor.submit(_run_synthesize, job_id, sheet_path, instrument)
@@ -130,24 +90,6 @@ def _run_synthesize(job_id: str, sheet_path: str, instrument: str) -> None:
             analysis=json.dumps(result["analysis"]),
         )
     except ScoreImportError as exc:
-        db.update_job(job_id, status=db.STATUS_REJECTED, error=str(exc))
-    except Exception as exc:  # noqa: BLE001
-        db.update_job(job_id, status=db.STATUS_FAILED,
-                      error=f"{exc}\n{traceback.format_exc()}")
-
-
-def _run_youtube(job_id: str, url: str, instrument: str) -> None:
-    db.update_job(job_id, status=db.STATUS_RUNNING)
-    try:
-        info = youtube.probe(url)
-        verdict = quality.assess_duration(info.duration_s)
-        if not verdict.ok:
-            db.update_job(job_id, status=db.STATUS_REJECTED, error=verdict.reason)
-            return
-        db.update_job(job_id, filename=info.title)
-        audio_path = youtube.download_audio(url, AUDIO_DIR, job_id)
-        _run_pipeline_into_db(job_id, str(audio_path), instrument, info.title)
-    except youtube.YouTubeError as exc:
         db.update_job(job_id, status=db.STATUS_REJECTED, error=str(exc))
     except Exception as exc:  # noqa: BLE001
         db.update_job(job_id, status=db.STATUS_FAILED,

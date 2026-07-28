@@ -24,7 +24,10 @@ from .types import BeatGrid, NoteEvent
 
 BPM_MIN = 40.0
 BPM_MAX = 208.0
-PREFERRED_BPM = 100.0  # tempo-octave prior: humans hear beats near this rate
+# Tempo-octave prior: the rate listeners tend to tap at. 120 rather than 100 —
+# with the centre at 100 anything above about 130 BPM was pulled down an octave
+# (a 150 BPM waltz came out as 75), which doubles every notated note value.
+PREFERRED_BPM = 120.0
 
 
 def _onset_weights(onsets: list[float], events: list[NoteEvent] | None,
@@ -156,11 +159,24 @@ def grid_from_onsets(
     )
 
 
-def _infer_beats_per_bar(times, weights, beat_times, candidates=(4, 3)) -> int:
+# Triple time is only chosen when it beats 4/4 by this margin. Barlines in the
+# wrong place make an otherwise-correct transcription look wrong, and duple is
+# both far more common and the safer error.
+#
+# Measured accent contrast (triple minus duple): a real waltz scored +0.039,
+# while duple material scored between +0.004 and -0.058. The threshold sits
+# between those, but it is calibrated on few examples — triple meter is genuinely
+# hard to hear from onset accents alone, so the bias stays towards 4/4.
+TRIPLE_METER_MARGIN = 0.025
+
+
+def _infer_beats_per_bar(times, weights, beat_times) -> int:
     """Pick the bar length whose downbeats best line up with strong onsets.
 
-    Only distinguishes duple from triple meter; anything exotic falls back to
-    4/4, which is the safe default for readability.
+    Distinguishes triple from duple time only, and is deliberately biased
+    towards 4/4: a piece whose accent pattern fits neither (a two-beat ostinato,
+    say) scores weakly for both, and picking 3/4 off such a weak signal was
+    measured putting barlines through the middle of every bar.
     """
     if len(beat_times) < 4:
         return 4
@@ -168,22 +184,21 @@ def _infer_beats_per_bar(times, weights, beat_times, candidates=(4, 3)) -> int:
     # Beat index (possibly fractional) of every anchor.
     idx = (np.asarray(times) - beat_times[0]) / period
     on_beat = np.abs(idx - np.round(idx)) < 0.25
-    if on_beat.sum() < 4:
+    if on_beat.sum() < 6:
         return 4
     beat_idx = np.round(idx[on_beat]).astype(int)
     w = np.asarray(weights)[on_beat]
 
-    best, best_score = 4, -np.inf
-    for bpb in candidates:
+    def contrast(bpb: int) -> float:
+        """How much more accent falls on one beat of the bar than by chance."""
         phases = beat_idx % bpb
-        # Strong-beat energy concentrated on one phase => that's the downbeat.
         totals = np.array([w[phases == ph].sum() for ph in range(bpb)])
         if totals.sum() <= 0:
-            continue
-        score = totals.max() / totals.sum() - 1.0 / bpb  # contrast over chance
-        if score > best_score:
-            best, best_score = bpb, score
-    return best
+            return -np.inf
+        return float(totals.max() / totals.sum() - 1.0 / bpb)
+
+    duple, triple = contrast(4), contrast(3)
+    return 3 if triple > duple + TRIPLE_METER_MARGIN else 4
 
 
 def track_beats(

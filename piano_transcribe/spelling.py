@@ -23,13 +23,44 @@ import numpy as np
 
 from .types import NoteEvent
 
-# Krumhansl-Kessler major / minor key profiles (tonic-relative weights).
+# Key profiles: tonic-relative weights for how much each pitch class belongs to
+# a key. The original Krumhansl-Kessler pair (1982) is kept for reference, but
+# it is *not* used for the decision — it is known to be weak, and it was
+# measured here calling an unambiguous A-minor melody "E major" (four wrong
+# sharps on the page) purely because the dominant was the most frequent note.
 KS_MAJOR_PROFILE = (
     6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88,
 )
 KS_MINOR_PROFILE = (
     6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17,
 )
+
+# Three later profile sets, each derived from a different corpus. All three get
+# the above example right, and they disagree with each other on different kinds
+# of music — so the estimate is a vote rather than any single set's opinion.
+PROFILE_SETS = {
+    # Aarden-Essen: European folk melodies.
+    "aarden": (
+        (17.7661, 0.14562, 14.9265, 0.16019, 19.8049, 11.3587,
+         0.29125, 22.062, 0.14562, 8.15494, 0.233, 4.95122),
+        (18.2648, 0.73762, 14.0499, 16.8599, 0.70249, 14.4362,
+         0.70249, 18.6161, 4.56621, 1.93186, 7.37619, 1.75623),
+    ),
+    # Temperley / Kostka-Payne: common-practice tonal harmony.
+    "temperley": (
+        (0.748, 0.06, 0.488, 0.082, 0.67, 0.46, 0.096, 0.715, 0.104, 0.366,
+         0.057, 0.4),
+        (0.712, 0.084, 0.474, 0.618, 0.049, 0.46, 0.105, 0.747, 0.404, 0.067,
+         0.133, 0.33),
+    ),
+    # Bellman-Budge: a broad tonal corpus.
+    "bellman": (
+        (16.8, 0.86, 12.95, 1.41, 13.49, 11.93, 1.25, 20.28, 1.8, 8.04,
+         0.62, 10.57),
+        (18.16, 0.69, 12.99, 13.34, 1.07, 11.15, 1.38, 21.07, 7.49, 1.53,
+         0.92, 10.21),
+    ),
+}
 
 
 @dataclass
@@ -87,30 +118,61 @@ def _pearson(a, b) -> float:
     return float(np.corrcoef(a, b)[0, 1])
 
 
-def estimate_key(events: list[NoteEvent]) -> KeyEstimate:
-    """Estimate the key via Krumhansl-Schmuckler profile correlation.
+def pitch_class_histogram(events: list[NoteEvent]) -> np.ndarray:
+    """Duration-weighted pitch-class profile of a performance.
 
-    Builds a duration-weighted pitch-class histogram, correlates it against all
-    24 rotated major/minor profiles, and returns the best-correlating key.
-    Empty input defaults to C major.
+    Weighting by duration rather than note count matters: a held tonic says far
+    more about the key than a passing sixteenth.
     """
     histogram = np.zeros(12, dtype=float)
     for event in events:
         histogram[event.pitch % 12] += max(event.duration_s, 1e-6)
+    return histogram
 
+
+def estimate_key(events: list[NoteEvent]) -> KeyEstimate:
+    """Estimate the key by correlating against several published key profiles.
+
+    Each profile set votes for its best-correlating key and the majority wins,
+    with the summed correlation breaking ties. A vote is used because a single
+    profile set fails in characteristic ways — the classic Krumhansl weights in
+    particular mistake a minor key for the major a fifth above whenever the
+    dominant is repeated a lot, which is extremely common (an A-minor melody
+    dwelling on E came out as E major, putting four wrong sharps in the key
+    signature). The three sets here disagree on different material, so their
+    consensus is markedly steadier than any one of them.
+
+    Empty input defaults to C major.
+    """
+    histogram = pitch_class_histogram(events)
     if histogram.sum() == 0:
         return KeyEstimate(tonic_pc=0, mode="major", correlation=0.0)
 
-    best: KeyEstimate | None = None
-    for mode, profile in (("major", KS_MAJOR_PROFILE), ("minor", KS_MINOR_PROFILE)):
-        base = np.asarray(profile, dtype=float)
-        for tonic in range(12):
-            corr = _pearson(histogram, np.roll(base, tonic))
-            if best is None or corr > best.correlation:
-                best = KeyEstimate(tonic_pc=tonic, mode=mode, correlation=corr)
+    votes: dict[tuple[int, str], float] = {}
+    tally: dict[tuple[int, str], int] = {}
 
-    assert best is not None
-    return best
+    for major_profile, minor_profile in PROFILE_SETS.values():
+        best_key, best_corr = None, -np.inf
+        for mode, profile in (("major", major_profile), ("minor", minor_profile)):
+            base = np.asarray(profile, dtype=float)
+            for tonic in range(12):
+                corr = _pearson(histogram, np.roll(base, tonic))
+                if corr > best_corr:
+                    best_key, best_corr = (tonic, mode), corr
+        if best_key is not None:
+            tally[best_key] = tally.get(best_key, 0) + 1
+            votes[best_key] = votes.get(best_key, 0.0) + best_corr
+
+    # Most votes wins; summed correlation is the tie-break.
+    winner = max(tally, key=lambda k: (tally[k], votes[k]))
+    tonic, mode = winner
+    return KeyEstimate(
+        tonic_pc=tonic,
+        mode=mode,
+        # Report the mean correlation of the sets that chose it, so the
+        # confidence figure stays comparable to before.
+        correlation=float(votes[winner] / tally[winner]),
+    )
 
 
 def spell_notes(events: list[NoteEvent], key: KeyEstimate) -> list[str]:

@@ -191,3 +191,87 @@ def test_tempo_bpm_ignores_a_single_odd_beat():
     """One mis-tracked beat shouldn't skew the reported tempo (median, not mean)."""
     times = [0.0, 0.5, 1.0, 1.5, 2.0, 4.0]  # last gap is a tracking glitch
     assert BeatGrid(beat_times_s=times).tempo_bpm == pytest.approx(120.0)
+
+
+# --- key detection -----------------------------------------------------------
+
+def _notes(pitches, dur=0.5):
+    return [NoteEvent(p, i * dur, i * dur + dur, 80) for i, p in enumerate(pitches)]
+
+
+@pytest.mark.parametrize("pitches,expected", [
+    ([60, 62, 64, 65, 67, 69, 71, 72], "C major"),
+    ([67, 69, 71, 72, 74, 76, 78, 79], "G major"),
+    ([65, 67, 69, 70, 72, 74, 76, 77], "F major"),
+    ([69, 71, 72, 74, 76, 77, 79, 81], "A minor"),
+    ([62, 64, 65, 67, 69, 70, 72, 74], "D minor"),
+])
+def test_unambiguous_keys(pitches, expected):
+    from piano_transcribe import spelling
+
+    assert spelling.estimate_key(_notes(pitches)).name == expected
+
+
+def test_minor_key_is_not_mistaken_for_its_dominant():
+    """A minor melody dwelling on the dominant is still in the minor key.
+
+    Regression: the classic Krumhansl profiles called this A-minor phrase
+    "E major", which put four wrong sharps in the key signature. The estimate
+    now votes across several profile sets.
+    """
+    from piano_transcribe import spelling
+
+    # Für Elise's opening: E D# E D# E B D C A, over an A-minor accompaniment.
+    melody = _notes([76, 75, 76, 75, 76, 71, 74, 72, 69])
+    bass = [NoteEvent(p, 0.0, 4.0, 70) for p in (45, 52, 57)]
+    key = spelling.estimate_key(melody + bass)
+    assert key.name == "A minor"
+    assert key.key_signature_sharps == 0
+
+
+# --- tempo octave ------------------------------------------------------------
+
+def test_fast_music_is_not_halved():
+    """A 150 BPM piece must not be read as 75.
+
+    Regression: the tempo-octave prior was centred at 100 BPM, so anything much
+    faster was pulled down an octave — doubling every notated note value.
+    """
+    bpm = 150.0
+    spb = 60.0 / bpm
+    onsets = [i * spb for i in range(48)]
+    grid = grid_from_onsets(onsets, bpm_hint=bpm)
+    period = grid.beat_times_s[1] - grid.beat_times_s[0]
+    assert 60.0 / period == pytest.approx(bpm, rel=0.06)
+
+
+def test_meter_defaults_to_four_four_without_clear_triple_evidence():
+    """Duple material must not be barred in three."""
+    spb = 60.0 / 112.0
+    onsets = []
+    for group in range(24):          # a repeating two-beat pattern
+        t = group * 2 * spb
+        onsets += [t + i * 0.25 * spb for i in range(8)]
+    assert grid_from_onsets(onsets, bpm_hint=112.0).beats_per_bar == 4
+
+
+def test_exported_musicxml_carries_the_tempo(tmp_path):
+    """The tempo must survive export, not just exist on the Score object.
+
+    Regression: a MetronomeMark inserted on the Score was silently dropped by
+    the MusicXML writer because the parts were already barred into measures, so
+    the downloaded file opened at 120 BPM everywhere and showed no tempo mark.
+    """
+    from piano_transcribe import notate, spelling, voices
+
+    bpm = 150.0
+    spb = 60.0 / bpm
+    grid = BeatGrid(beat_times_s=[i * spb for i in range(16)], beats_per_bar=3)
+    events = [NoteEvent(60 + i, i * spb, (i + 1) * spb, 80) for i in range(8)]
+    q = quantize.quantize_nearest(events, grid)
+    voices.assign_middle_c_split(q)
+    score = notate.build_score(q, grid, spelling.estimate_key(events))
+
+    out = notate.export_musicxml(score, tmp_path / "s.musicxml")
+    xml = out.read_text()
+    assert "<per-minute>150" in xml, "exported MusicXML has no tempo marking"

@@ -23,6 +23,8 @@ CLEF_RANGES = {
 }
 
 _SHARP_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+# Flat keys are spelled with flats — B♭ major has a B♭, never an A#.
+_FLAT_NAMES = ("C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B")
 _NATURALS = {0: "C", 2: "D", 4: "E", 5: "F", 7: "G", 9: "A", 11: "B"}
 
 CIRCLE_OF_FIFTHS = [
@@ -142,6 +144,153 @@ def score_difficulty(analysis: dict) -> dict:
         reasons.append("a demanding key signature")
 
     return {"level": level, "label": labels[level], "reasons": reasons}
+
+
+# --- scales and fingering ----------------------------------------------------
+
+MAJOR_STEPS = (0, 2, 4, 5, 7, 9, 11, 12)
+NATURAL_MINOR_STEPS = (0, 2, 3, 5, 7, 8, 10, 12)
+HARMONIC_MINOR_STEPS = (0, 2, 3, 5, 7, 8, 11, 12)
+MELODIC_MINOR_STEPS = (0, 2, 3, 5, 7, 9, 11, 12)
+BLUES_STEPS = (0, 3, 5, 6, 7, 10, 12)
+PENTATONIC_MAJOR_STEPS = (0, 2, 4, 7, 9, 12)
+PENTATONIC_MINOR_STEPS = (0, 3, 5, 7, 10, 12)
+
+SCALE_TYPES = {
+    "major": ("Major", MAJOR_STEPS),
+    "natural_minor": ("Natural minor", NATURAL_MINOR_STEPS),
+    "harmonic_minor": ("Harmonic minor", HARMONIC_MINOR_STEPS),
+    "melodic_minor": ("Melodic minor (ascending)", MELODIC_MINOR_STEPS),
+    "pentatonic_major": ("Major pentatonic", PENTATONIC_MAJOR_STEPS),
+    "pentatonic_minor": ("Minor pentatonic", PENTATONIC_MINOR_STEPS),
+    "blues": ("Blues", BLUES_STEPS),
+}
+
+# Standard one-octave fingerings for the white-key major scales, ascending.
+# 1 = thumb … 5 = little finger. These are the classical fingerings taught for
+# piano; the thumb-under point is what makes a scale playable at speed, so it
+# matters that these are the real ones rather than a generated pattern.
+MAJOR_FINGERING = {
+    0:  {"right": [1, 2, 3, 1, 2, 3, 4, 5], "left": [5, 4, 3, 2, 1, 3, 2, 1]},   # C
+    7:  {"right": [1, 2, 3, 1, 2, 3, 4, 5], "left": [5, 4, 3, 2, 1, 3, 2, 1]},   # G
+    2:  {"right": [1, 2, 3, 1, 2, 3, 4, 5], "left": [5, 4, 3, 2, 1, 3, 2, 1]},   # D
+    9:  {"right": [1, 2, 3, 1, 2, 3, 4, 5], "left": [5, 4, 3, 2, 1, 3, 2, 1]},   # A
+    4:  {"right": [1, 2, 3, 1, 2, 3, 4, 5], "left": [5, 4, 3, 2, 1, 3, 2, 1]},   # E
+    11: {"right": [1, 2, 3, 1, 2, 3, 4, 5], "left": [4, 3, 2, 1, 4, 3, 2, 1]},   # B
+    5:  {"right": [1, 2, 3, 4, 1, 2, 3, 4], "left": [5, 4, 3, 2, 1, 3, 2, 1]},   # F
+}
+# The black-key scales start on a different finger so the thumb still lands on
+# white keys — the whole point of scale fingering.
+BLACK_KEY_FINGERING = {
+    6:  {"right": [2, 3, 4, 1, 2, 3, 1, 2], "left": [4, 3, 2, 1, 3, 2, 1, 4]},   # F#
+    1:  {"right": [2, 3, 1, 2, 3, 4, 1, 2], "left": [3, 2, 1, 4, 3, 2, 1, 3]},   # C#/Db
+    8:  {"right": [3, 4, 1, 2, 3, 1, 2, 3], "left": [3, 2, 1, 4, 3, 2, 1, 3]},   # Ab
+    3:  {"right": [3, 1, 2, 3, 4, 1, 2, 3], "left": [3, 2, 1, 4, 3, 2, 1, 3]},   # Eb
+    10: {"right": [4, 1, 2, 3, 1, 2, 3, 4], "left": [3, 2, 1, 4, 3, 2, 1, 3]},   # Bb
+}
+
+
+_LETTERS = "CDEFGAB"
+_LETTER_PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+
+# Conventional spelling of each tonic. Major keys favour F#/D♭; minor keys
+# favour C#/G# — this is why the same key sounds "sharp" or "flat" on paper.
+_MAJOR_TONIC = {0: "C", 1: "D♭", 2: "D", 3: "E♭", 4: "E", 5: "F",
+                6: "F#", 7: "G", 8: "A♭", 9: "A", 10: "B♭", 11: "B"}
+_MINOR_TONIC = {0: "C", 1: "C#", 2: "D", 3: "E♭", 4: "E", 5: "F",
+                6: "F#", 7: "G", 8: "G#", 9: "A", 10: "B♭", 11: "B"}
+
+
+def _accidental(delta: int) -> str:
+    return {0: "", 1: "#", 2: "##", -1: "♭", -2: "♭♭"}.get(delta, "")
+
+
+def _spell_stepwise(tonic_name: str, tonic_pc: int, steps) -> list[str]:
+    """Spell a seven-note scale so each degree uses the next letter.
+
+    A scale uses every letter once, in order — which is why F# major's seventh
+    degree is E#, not F. Naming it from a pitch-class table instead produces
+    two Fs and no E, and teaches the wrong thing.
+    """
+    start = _LETTERS.index(tonic_name[0])
+    names = []
+    for i, semis in enumerate(steps):
+        letter = _LETTERS[(start + i) % 7]
+        target = (tonic_pc + semis) % 12
+        delta = (target - _LETTER_PC[letter]) % 12
+        if delta > 6:
+            delta -= 12
+        names.append(letter + _accidental(delta))
+    return names
+
+
+def scale(tonic_pc: int, scale_type: str = "major", octave: int = 4) -> dict:
+    """A scale: its pitches, note names, and piano fingering where standard.
+
+    Fingering is only offered for the seven-note scales it's actually defined
+    for; a pentatonic or blues scale has no single agreed fingering, so none is
+    invented — a wrong fingering is worse than none.
+    """
+    if scale_type not in SCALE_TYPES:
+        raise ValueError(f"Unknown scale type '{scale_type}'.")
+    label, steps = SCALE_TYPES[scale_type]
+    tonic_pc %= 12
+    root = (octave + 1) * 12 + tonic_pc
+    pitches = [root + s for s in steps]
+
+    minorish = scale_type in ("natural_minor", "harmonic_minor", "melodic_minor",
+                              "pentatonic_minor", "blues")
+    tonic_name = (_MINOR_TONIC if minorish else _MAJOR_TONIC)[tonic_pc]
+
+    if len(steps) == 8:
+        note_names = _spell_stepwise(tonic_name, tonic_pc, steps)
+    else:
+        # Pentatonic and blues scales skip letters, so stepwise spelling doesn't
+        # apply; flats are the convention for the minor-flavoured ones.
+        table = _FLAT_NAMES if minorish or "♭" in tonic_name else _SHARP_NAMES
+        note_names = [table[p % 12] for p in pitches]
+
+    fingering = None
+    if scale_type == "major":
+        fingering = MAJOR_FINGERING.get(tonic_pc) or BLACK_KEY_FINGERING.get(tonic_pc)
+    elif scale_type in ("natural_minor", "harmonic_minor", "melodic_minor"):
+        # Minor scales reuse the relative major's shape closely enough that the
+        # white-key fingering applies; only offer it where that's true.
+        fingering = MAJOR_FINGERING.get(tonic_pc)
+
+    return {
+        "tonic": tonic_name,
+        "type": scale_type,
+        "label": f"{tonic_name} {label.lower()}",
+        "pitches": pitches,
+        "note_names": note_names,
+        "intervals": list(steps),
+        "fingering": fingering,
+        "degrees": len(steps) - 1,
+    }
+
+
+def list_scale_types() -> list[dict]:
+    return [{"key": k, "label": v[0]} for k, v in SCALE_TYPES.items()]
+
+
+# --- practice guidance -------------------------------------------------------
+
+PRACTICE_STEPS = [
+    ("Sit properly", "Bench far enough back that your forearms are level with "
+     "the keys, wrists neither dropped nor raised. Most early tension comes "
+     "from sitting too close."),
+    ("Name what you play", "Say the note names aloud as you play them. It is "
+     "slow and it feels silly, and it is the fastest route to reading fluently."),
+    ("Hands separately first", "Learn each hand on its own until it is easy, "
+     "then put them together at half the speed you think you need."),
+    ("Slow is the shortcut", "Practise at the speed you can play it correctly. "
+     "Speed is a by-product of accuracy, never the other way round."),
+    ("Small sections", "Two bars, repeated until secure, beats one pass of the "
+     "whole page every time."),
+    ("Use the metronome", "Not for the whole session — for the passage that "
+     "keeps rushing. Set it slower than feels comfortable."),
+]
 
 
 def key_signature_reference() -> list[dict]:

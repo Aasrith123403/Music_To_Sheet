@@ -152,18 +152,32 @@ def build_score(
     md.title = title
     score.insert(0, md)
 
-    # Record the performed tempo. Without it music21 exports MIDI at its default
-    # 120 BPM, so the score would play back at the wrong speed and any
-    # follow-along cursor would drift out of sync with the audio.
-    bpm = grid.tempo_bpm
-    if bpm:
-        score.insert(0, m21tempo.MetronomeMark(number=round(bpm, 2)))
+    def mark_tempo(part) -> None:
+        """Put the performed tempo in ``part``'s first measure.
+
+        Without a tempo mark music21 exports MIDI at its default 120 BPM, so the
+        score plays back at the wrong speed and any follow-along cursor drifts
+        out of sync with the audio.
+
+        It has to go *inside* a measure. A ``MetronomeMark`` inserted on the
+        Score is silently dropped by the MusicXML writer once the parts are
+        already measured — which they are here, since ``_finalize_part`` bars
+        them itself — so the exported file carried no tempo at all and opened at
+        120 BPM in every other notation program.
+        """
+        bpm = grid.tempo_bpm
+        if not bpm:
+            return
+        mark = m21tempo.MetronomeMark(number=round(bpm, 2))
+        first = part.getElementsByClass(stream.Measure).first()
+        (first or part).insert(0.0, mark)
 
     if inst.notation == "grand":
         treble = new_part("RH", "TrebleClef")
         bass = new_part("LH", "BassClef")
         _finalize_part(treble, _place_notes(treble, staff_entries[1]), full_ql)
         _finalize_part(bass, _place_notes(bass, staff_entries[2]), full_ql)
+        mark_tempo(treble)
         score.insert(0, treble)
         score.insert(0, bass)
         score.insert(0, layout.StaffGroup(
@@ -172,6 +186,7 @@ def build_score(
         part = new_part("P1", music21_clef_name(inst.clef))
         all_entries = staff_entries[1] + staff_entries[2]
         _finalize_part(part, _place_notes(part, all_entries), full_ql)
+        mark_tempo(part)
         part.partName = inst.display_name
         score.insert(0, part)
 

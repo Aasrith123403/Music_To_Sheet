@@ -53,11 +53,9 @@ def init_db(db_path: Path | None = None) -> None:
                 title         TEXT,
                 filename      TEXT,
                 instrument    TEXT,
-                source_url    TEXT,
                 audio_path    TEXT,
                 musicxml_path TEXT,
                 midi_path     TEXT,
-                stems_dir     TEXT,
                 analysis      TEXT,
                 error         TEXT,
                 created_at    REAL NOT NULL,
@@ -74,7 +72,6 @@ def create_job(
     filename: str,
     audio_path: str | None,
     instrument: str = "piano",
-    source_url: str | None = None,
     status: str = STATUS_QUEUED,
     kind: str = "transcribe",
     user_id: int | None = None,
@@ -84,10 +81,10 @@ def create_job(
     with _connect() as conn:
         conn.execute(
             """INSERT INTO jobs
-               (id, user_id, status, kind, title, filename, instrument, source_url,
+               (id, user_id, status, kind, title, filename, instrument,
                 audio_path, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (job_id, user_id, status, kind, title, filename, instrument, source_url,
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (job_id, user_id, status, kind, title, filename, instrument,
              audio_path, now, now),
         )
         conn.commit()

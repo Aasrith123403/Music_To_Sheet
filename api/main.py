@@ -8,7 +8,6 @@ Endpoints:
     GET  /auth/me              current user + whether Google sign-in is available
     GET  /auth/google/login    start Google OAuth (see api.google_oauth)
     POST /jobs                 upload audio -> queue the pipeline
-    POST /jobs/youtube         transcribe a YouTube URL (private-study use)
     POST /synthesize           sheet music -> playable MIDI
     GET  /jobs/{id}            poll job status (+ analysis when done)
     GET  /jobs/{id}/musicxml   download the rendered MusicXML
@@ -40,10 +39,10 @@ from fastapi import (
 from fastapi.responses import FileResponse
 
 from piano_transcribe import chords as chords_mod
-from piano_transcribe import learn, stems as stems_mod
+from piano_transcribe import learn
 from piano_transcribe.instruments import get_instrument, list_instruments
 
-from . import auth, config, db, google_oauth, jobs, youtube
+from . import auth, config, db, google_oauth, jobs
 
 ALLOWED_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aiff"}
 SHEET_SUFFIXES = {
@@ -150,27 +149,6 @@ async def create_job(
     return {"job_id": job_id, "status": db.STATUS_QUEUED}
 
 
-@app.post("/jobs/youtube", status_code=201)
-def create_youtube_job(
-    payload: dict = Body(...),
-    user: auth.User | None = Depends(auth.current_user),
-) -> dict:
-    """Queue a transcription job for a YouTube URL (private-study use only)."""
-    url = (payload.get("url") or "").strip()
-    instrument = get_instrument(payload.get("instrument")).key
-    if not url:
-        raise HTTPException(status_code=400, detail="Missing 'url'.")
-    if not youtube.is_youtube_url(url):
-        raise HTTPException(status_code=400, detail="Not a recognised YouTube URL.")
-
-    job_id = uuid.uuid4().hex
-    db.create_job(job_id, filename="YouTube audio", audio_path=None,
-                  instrument=instrument, source_url=url,
-                  user_id=user.id if user else None)
-    jobs.submit_youtube_job(job_id, url, instrument)
-    return {"job_id": job_id, "status": db.STATUS_QUEUED}
-
-
 @app.post("/synthesize", status_code=201)
 async def create_synthesis(
     file: UploadFile = File(...),
@@ -228,7 +206,6 @@ def _job_payload(job: dict) -> dict:
         "title": job.get("title"),
         "filename": job["filename"],
         "instrument": job["instrument"],
-        "source_url": job["source_url"],
         "error": job["error"],
         "musicxml_ready": bool(job["musicxml_path"]),
         "midi_ready": bool(job["midi_path"]),
@@ -360,65 +337,24 @@ def chord_key(tonic: int = 0, mode: str = "major") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# stem separation
-# ---------------------------------------------------------------------------
-
-@app.get("/stems/models")
-def stem_models() -> dict:
-    """Separation models available, and whether the feature is installed."""
+@app.get("/learn/scales")
+def learn_scales(tonic: int = 0, type: str = "major") -> dict:
+    """A scale with its notes and (where standard) piano fingering."""
     try:
-        import demucs  # noqa: F401
-
-        available = True
-    except ImportError:
-        available = False
-    return {"available": available, "models": stems_mod.list_models(),
-            "default": stems_mod.DEFAULT_MODEL}
+        return learn.scale(int(tonic), type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.post("/stems", status_code=201)
-async def create_stems_job(
-    file: UploadFile = File(...),
-    model: str = Form(stems_mod.DEFAULT_MODEL),
-    user: auth.User | None = Depends(auth.current_user),
-) -> dict:
-    """Split an uploaded track into stems."""
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in ALLOWED_SUFFIXES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported audio type '{suffix}'. Allowed: {sorted(ALLOWED_SUFFIXES)}",
-        )
-    if model not in stems_mod.MODELS:
-        raise HTTPException(status_code=400, detail=f"Unknown model '{model}'.")
-
-    job_id = uuid.uuid4().hex
-    audio_path = AUDIO_DIR / f"{job_id}{suffix}"
-    audio_path.write_bytes(await file.read())
-
-    db.create_job(job_id, filename=file.filename or audio_path.name,
-                  audio_path=str(audio_path), instrument="piano",
-                  kind="stems", user_id=user.id if user else None)
-    jobs.submit_stems_job(job_id, str(audio_path), model)
-    return {"job_id": job_id, "status": db.STATUS_QUEUED}
+@app.get("/learn/scale-types")
+def learn_scale_types() -> dict:
+    return {"types": learn.list_scale_types()}
 
 
-@app.get("/jobs/{job_id}/stems/{name}")
-def get_stem(job_id: str, name: str,
-             user: auth.User | None = Depends(auth.current_user)) -> FileResponse:
-    """Stream one separated stem."""
-    job = _accessible_job(job_id, user)
-    if not job.get("stems_dir"):
-        raise HTTPException(status_code=409, detail="Stems not ready.")
-    # Guard against path traversal in the stem name.
-    if not name.isalnum():
-        raise HTTPException(status_code=400, detail="Bad stem name.")
-    path = Path(job["stems_dir"]) / f"{name}.wav"
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"No '{name}' stem.")
-    return FileResponse(path, media_type="audio/wav",
-                        filename=f"{job_id}-{name}.wav")
+@app.get("/learn/practice")
+def learn_practice() -> dict:
+    """Practice guidance for beginners."""
+    return {"steps": [{"title": t, "text": x} for t, x in learn.PRACTICE_STEPS]}
 
 
 @app.get("/learn/keys")

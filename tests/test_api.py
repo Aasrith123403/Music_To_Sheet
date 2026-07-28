@@ -1,7 +1,7 @@
-"""API tests with the pipeline and YouTube network fully mocked.
+"""API tests with the transcription pipeline mocked.
 
-These verify the HTTP surface + job lifecycle without touching audio, basic-pitch
-or the network, so they run in the light test environment. Skipped entirely if
+These verify the HTTP surface + job lifecycle without touching audio or
+basic-pitch, so they run in the light test environment. Skipped entirely if
 fastapi/httpx aren't installed.
 """
 
@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 
 import api.jobs as jobs
 import api.main as main
-import api.youtube as youtube
 from piano_transcribe.pipeline import PipelineResult, Rejected
 
 
@@ -86,37 +85,3 @@ def test_upload_rejection_surfaces_reason(client, monkeypatch):
     s = _wait(client, r.json()["job_id"])
     assert s["status"] == "rejected"
     assert "dense" in s["error"].lower()
-
-
-def test_youtube_bad_url_400(client):
-    assert client.post("/jobs/youtube", json={"url": "https://evil.com/x"}).status_code == 400
-    assert client.post("/jobs/youtube", json={"url": ""}).status_code == 400
-
-
-def test_youtube_flow_uses_title(client, monkeypatch):
-    _fake_pipeline(monkeypatch)
-    monkeypatch.setattr(jobs.youtube, "probe",
-                        lambda url: youtube.VideoInfo(title="My Song", duration_s=30.0))
-
-    def fake_dl(url, out_dir, job_id):
-        out_dir.mkdir(parents=True, exist_ok=True)
-        p = out_dir / f"{job_id}.wav"
-        p.write_bytes(b"RIFF....")
-        return p
-
-    monkeypatch.setattr(jobs.youtube, "download_audio", fake_dl)
-
-    r = client.post("/jobs/youtube", json={"url": "https://youtu.be/abc", "instrument": "piano"})
-    assert r.status_code == 201
-    s = _wait(client, r.json()["job_id"])
-    assert s["status"] == "done"
-    assert s["filename"] == "My Song"
-
-
-def test_youtube_rejects_long_video(client, monkeypatch):
-    monkeypatch.setattr(jobs.youtube, "probe",
-                        lambda url: youtube.VideoInfo(title="Long", duration_s=60 * 30))
-    r = client.post("/jobs/youtube", json={"url": "https://youtu.be/abc"})
-    s = _wait(client, r.json()["job_id"])
-    assert s["status"] == "rejected"
-    assert "min" in s["error"].lower()
