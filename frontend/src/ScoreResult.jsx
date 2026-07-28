@@ -121,6 +121,7 @@ export default function ScoreResult({ job }) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [follow, setFollow] = useState(true);
   const [lastNote, setLastNote] = useState(null);
+  const [rate, setRate] = useState(1);
   const audioRef = useRef(null);
   const scheduleRef = useRef([]);
   const detachRef = useRef(null);
@@ -224,14 +225,32 @@ export default function ScoreResult({ job }) {
             <span>
               {job.kind === "synthesize" ? "Playback" : "Playback of the written score"}
             </span>
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={follow}
-                onChange={(e) => setFollow(e.target.checked)}
-              />
-              Follow the score
-            </label>
+            <span className="playback-controls">
+              <label className="toggle">
+                Speed
+                <select
+                  value={rate}
+                  onChange={(e) => {
+                    const r = Number(e.target.value);
+                    setRate(r);
+                    // Slowing a passage down is the main way to learn it.
+                    if (audioRef.current) audioRef.current.playbackRate = r;
+                  }}
+                >
+                  {[0.5, 0.75, 1, 1.25, 1.5].map((r) => (
+                    <option key={r} value={r}>{r}×</option>
+                  ))}
+                </select>
+              </label>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={follow}
+                  onChange={(e) => setFollow(e.target.checked)}
+                />
+                Follow the score
+              </label>
+            </span>
           </div>
           {job.kind !== "synthesize" && (
             <p className="footnote playback-note">

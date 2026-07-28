@@ -15,7 +15,6 @@ const API_ROUTES = [
   "library",
   "learn",
   "chords",
-  "stems",
 ];
 
 export default defineConfig({

@@ -3,7 +3,6 @@ import ScoreResult from "./ScoreResult.jsx";
 import Library from "./Library.jsx";
 import Learn from "./Learn.jsx";
 import Chords from "./Chords.jsx";
-import Stems from "./Stems.jsx";
 import { AuthDialog, UserMenu } from "./AuthPanel.jsx";
 import { api } from "./api.js";
 
@@ -11,7 +10,6 @@ const TERMINAL = ["done", "failed", "rejected"];
 const SHEET_ACCEPT = ".musicxml,.xml,.mxl,.mid,.midi,.pdf,.png,.jpg,.jpeg";
 const PAGES = [
   ["studio", "Studio"],
-  ["stems", "Stems"],
   ["chords", "Chords"],
   ["library", "Library"],
   ["learn", "Learn"],
@@ -26,9 +24,7 @@ export default function App() {
   const [instruments, setInstruments] = useState([]);
   const [appMode, setAppMode] = useState("transcribe"); // transcribe | synthesize
   const [instrument, setInstrument] = useState("piano");
-  const [inputMode, setInputMode] = useState("file"); // file | youtube
   const [audioFile, setAudioFile] = useState(null);
-  const [url, setUrl] = useState("");
   const [sheetFile, setSheetFile] = useState(null);
 
   const [job, setJob] = useState(null);
@@ -59,11 +55,7 @@ export default function App() {
 
   function submitTranscribe(e) {
     e.preventDefault();
-    if (inputMode === "file") {
-      if (audioFile) run(() => api.transcribeFile(audioFile, instrument));
-    } else if (url.trim()) {
-      run(() => api.transcribeYoutube(url.trim(), instrument));
-    }
+    if (audioFile) run(() => api.transcribeFile(audioFile, instrument));
   }
 
   function submitSynthesize(e) {
@@ -73,8 +65,7 @@ export default function App() {
 
   const status = job?.status;
   const busy = status && !TERMINAL.includes(status);
-  const canTranscribe =
-    inputMode === "file" ? !!audioFile && !busy : url.trim() && !busy;
+  const canTranscribe = !!audioFile && !busy;
 
   const instrumentField = (label) => (
     <label className="field">
@@ -136,9 +127,6 @@ export default function App() {
 
       {page === "chords" && <Chords />}
 
-      {page === "stems" && (
-        <Stems user={user} onSignIn={() => setShowAuth(true)} />
-      )}
 
       {page === "studio" && (
         <>
@@ -167,51 +155,19 @@ export default function App() {
 
           {appMode === "transcribe" ? (
             <form className="card panel" onSubmit={submitTranscribe}>
-              <div className="tabs" role="tablist">
-                <button
-                  type="button"
-                  className={`tab ${inputMode === "file" ? "active" : ""}`}
-                  onClick={() => setInputMode("file")}
-                >
-                  Upload file
-                </button>
-                <button
-                  type="button"
-                  className={`tab ${inputMode === "youtube" ? "active" : ""}`}
-                  onClick={() => setInputMode("youtube")}
-                >
-                  YouTube link
-                </button>
-              </div>
 
-              {inputMode === "file" ? (
                 <label className="dropzone">
-                  <input
-                    type="file"
-                    accept=".wav,.mp3,.flac,.ogg,.m4a,.aiff,audio/*"
-                    onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
-                  />
-                  <span className="dz-icon">⤒</span>
-                  <span className="dz-text">
-                    {audioFile ? audioFile.name : "Choose an audio file"}
-                  </span>
-                  <span className="dz-hint">wav · mp3 · flac · m4a · ogg</span>
-                </label>
-              ) : (
-                <div className="url-row">
-                  <input
-                    type="url"
-                    className="text-input"
-                    placeholder="https://www.youtube.com/watch?v=…"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                  />
-                  <p className="fine-print">
-                    Downloads audio for private study only. Don’t publish
-                    generated scores of copyrighted music.
-                  </p>
-                </div>
-              )}
+                <input
+                  type="file"
+                  accept=".wav,.mp3,.flac,.ogg,.m4a,.aiff,audio/*"
+                  onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+                />
+                <span className="dz-icon">⤒</span>
+                <span className="dz-text">
+                  {audioFile ? audioFile.name : "Choose an audio file"}
+                </span>
+                <span className="dz-hint">wav · mp3 · flac · m4a · ogg</span>
+              </label>
 
               <div className="controls">
                 {instrumentField("Instrument")}

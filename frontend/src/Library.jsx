@@ -17,6 +17,8 @@ export default function Library({ user, onOpen, onSignIn }) {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("recent");
 
   async function load() {
     try {
@@ -59,9 +61,44 @@ export default function Library({ user, onOpen, onSignIn }) {
     );
   }
 
+  const shown = items
+    .filter((it) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return [it.title, it.key, it.instrument]
+        .filter(Boolean)
+        .some((f) => String(f).toLowerCase().includes(q));
+    })
+    .sort((a, b) => {
+      if (sort === "title") return (a.title || "").localeCompare(b.title || "");
+      if (sort === "difficulty")
+        return (b.difficulty?.level || 0) - (a.difficulty?.level || 0);
+      return (b.created_at || 0) - (a.created_at || 0);
+    });
+
   return (
     <div className="library">
-      {items.map((it) => (
+      <div className="library-bar">
+        <input
+          className="text-input"
+          placeholder="Search by name, key or instrument…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="recent">Newest first</option>
+          <option value="title">By name</option>
+          <option value="difficulty">Hardest first</option>
+        </select>
+      </div>
+
+      {!shown.length && (
+        <div className="card empty-state">
+          <p>Nothing matches “{query}”.</p>
+        </div>
+      )}
+
+      {shown.map((it) => (
         <div className="card lib-item" key={it.job_id}>
           <div className="lib-main" onClick={() => onOpen(it.job_id)}>
             <div className="lib-title-row">

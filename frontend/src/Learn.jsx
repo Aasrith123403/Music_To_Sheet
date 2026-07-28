@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { BeamedNotes, EighthNote, HalfNote, QuarterNote } from "./MusicIcon.jsx";
 import Keyboard from "./Keyboard.jsx";
 import { midiToName, playNote, playSequence, primeAudio } from "./audio.js";
+import { ChordEar, Metronome, PracticeGuide, ScaleTrainer } from "./PianoTools.jsx";
 
 /** Renders one engraved flashcard note. */
 function Flashcard({ musicxml }) {
@@ -437,10 +438,14 @@ export default function Learn() {
   return (
     <div className="learn">
       <NoteTrainer />
+      <ScaleTrainer />
+      <Metronome />
+      <ChordEar />
       <EarTrainer />
       <KeyboardExplorer />
       <Basics />
       <KeyReference />
+      <PracticeGuide />
     </div>
   );
 }

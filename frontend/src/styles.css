@@ -1069,27 +1069,67 @@ button.key-cell.playing .key-acc { color: rgba(255,255,255,0.8); }
 .prog-name { font-size: 1.05rem; font-style: italic; }
 .prog-chords { font-size: 0.95rem; color: var(--ink-soft); }
 
-/* ---- stems ---- */
-.stems-card { margin-top: 1.5rem; padding: 1.25rem 1.35rem 1.5rem; }
-.stems-note { margin-top: 0; margin-bottom: 1rem; }
-.stem { padding: 0.85rem 0; border-bottom: 1px solid var(--rule); }
-.stem:last-child { border-bottom: none; }
-.stem.silent { opacity: 0.55; }
-.stem-head {
-  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
-  margin-bottom: 0.5rem;
-}
-.stem-name { font-size: 1.1rem; min-width: 90px; }
-.stem-meta, .stem-tag {
-  font-family: var(--sans); font-size: 0.72rem;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
-  flex: 1;
-}
-.stem-tag { font-style: normal; color: var(--warn); }
-.stem .audio-player { width: 100%; }
 
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em; background: var(--paper); padding: 0.1rem 0.35rem;
   border: 1px solid var(--rule);
 }
+
+/* ---- library controls ---- */
+.library-bar { display: flex; gap: 0.75rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
+.library-bar .text-input { flex: 1; min-width: 200px; }
+.library-bar select {
+  padding: 0.6rem 0.7rem; border: 1px solid var(--rule);
+  background: var(--paper-raised); font-family: var(--serif);
+  color: var(--ink); cursor: pointer;
+}
+.playback-controls { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
+.toggle select {
+  border: 1px solid var(--rule); background: var(--paper);
+  font-family: var(--serif); color: var(--ink);
+  padding: 0.15rem 0.3rem; margin-left: 0.35rem; cursor: pointer;
+  text-transform: none; letter-spacing: 0;
+}
+
+/* ---- metronome ---- */
+.metronome { display: flex; flex-direction: column; gap: 1rem; align-items: center; margin-top: 1.1rem; }
+.beat-lights { display: flex; gap: 0.7rem; }
+.beat-light {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid var(--rule-strong); background: var(--paper);
+  transition: background 0.05s;
+}
+.beat-light.downbeat { border-width: 2px; }
+.beat-light.on { background: var(--accent); }
+.bpm-row { display: flex; align-items: center; gap: 1.25rem; }
+.bpm-display { text-align: center; min-width: 90px; }
+.bpm-number { display: block; font-size: 2.6rem; line-height: 1; }
+.bpm-label {
+  font-family: var(--sans); font-size: 0.65rem;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.bpm-slider { width: 100%; max-width: 340px; accent-color: var(--accent); }
+
+/* ---- scales ---- */
+.scale-degrees { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+.scale-degree {
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  padding: 0.5rem 0.7rem; border: 1px solid var(--rule); background: var(--paper);
+  min-width: 52px;
+}
+.scale-degree.on { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.deg-note { font-size: 1.1rem; }
+.deg-finger { font-family: var(--sans); font-size: 0.8rem; font-weight: 700; color: var(--accent); }
+.scale-degree.on .deg-finger { color: var(--paper); }
+.scale-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin: 1rem 0;
+}
+.clef-picker .tab:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- practice guide ---- */
+.practice-list { margin: 1rem 0 0; padding-left: 1.3rem; }
+.practice-list li { margin-bottom: 0.9rem; }
+.practice-list strong { display: block; }
+.practice-list p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }

@@ -42,12 +42,6 @@ export const api = {
     body.append("instrument", instrument);
     return request("/jobs", { method: "POST", body });
   },
-  transcribeYoutube: (url, instrument) =>
-    request("/jobs/youtube", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, instrument }),
-    }),
   synthesize: (file, instrument) => {
     const body = new FormData();
     body.append("file", file);
@@ -57,6 +51,9 @@ export const api = {
 
   quiz: (clef, count) => request(`/learn/quiz?clef=${clef}&count=${count}`),
   keys: () => request("/learn/keys"),
+  scale: (tonic, type) => request(`/learn/scales?tonic=${tonic}&type=${type}`),
+  scaleTypes: () => request("/learn/scale-types"),
+  practice: () => request("/learn/practice"),
 
   chordQualities: () => request("/chords/qualities"),
   buildChord: (root, quality, inversion = 0, octave = 4) =>
@@ -73,11 +70,5 @@ export const api = {
     }),
   chordKey: (tonic, mode) => request(`/chords/key?tonic=${tonic}&mode=${mode}`),
 
-  stemModels: () => request("/stems/models"),
-  separate: (file, model) => {
-    const body = new FormData();
-    body.append("file", file);
-    body.append("model", model);
-    return request("/stems", { method: "POST", body });
-  },
 };
+
