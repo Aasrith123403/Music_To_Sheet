@@ -1,5 +1,10 @@
 [phases.setup]
-nixPkgs = ["python311", "nodejs_20"]
+# fluidsynth renders the transcription to a WAV server-side. Without the binary
+# the API reports `audio_ready: false`, the UI falls back to a browser MIDI
+# player, and both "Follow the score" and the speed control go dead — a failure
+# that only ever showed up in deployment, since fluidsynth is installed locally.
+# The soundfont itself ships inside pip's pretty_midi, so no extra package.
+nixPkgs = ["python311", "nodejs_20", "fluidsynth"]
 
 [phases.install]
 cmds = [

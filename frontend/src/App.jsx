@@ -8,11 +8,29 @@ import { api } from "./api.js";
 
 const TERMINAL = ["done", "failed", "rejected"];
 const SHEET_ACCEPT = ".musicxml,.xml,.mxl,.mid,.midi,.pdf,.png,.jpg,.jpeg";
+// [key, nav label, what this tab is for]. The blurb is shown under the nav so a
+// first-time visitor knows what to do on each page without having to poke at it.
 const PAGES = [
-  ["studio", "Studio"],
-  ["chords", "Chords"],
-  ["library", "Library"],
-  ["learn", "Learn"],
+  [
+    "studio",
+    "Studio",
+    "Upload a piano recording and get sheet music back — or upload a score and hear it played.",
+  ],
+  [
+    "chords",
+    "Chords",
+    "Build a chord from any root and quality, name one you already have, or browse the chords in a key.",
+  ],
+  [
+    "library",
+    "Library",
+    "Everything you’ve transcribed, saved to your account. Open a score to view, play or download it.",
+  ],
+  [
+    "learn",
+    "Learn",
+    "Practise reading notes, drill scales and chords with a metronome, and work through a piano routine.",
+  ],
 ];
 
 export default function App() {
@@ -93,8 +111,11 @@ export default function App() {
       <header className="hero">
         <div className="hero-mark">𝄞</div>
         <div className="hero-text">
-          <p className="eyebrow">Transcription Studio</p>
-          <h1>Audio &amp; Sheet Music</h1>
+          <p className="eyebrow">Piano transcription &amp; practice</p>
+          <h1>Manuscript</h1>
+          <p className="hero-tagline">
+            Recordings into sheet music, scores back into sound.
+          </p>
         </div>
         <div className="hero-spacer" />
         <UserMenu
@@ -112,12 +133,19 @@ export default function App() {
           <button
             key={key}
             className={`page-tab ${page === key ? "active" : ""}`}
+            aria-current={page === key ? "page" : undefined}
             onClick={() => setPage(key)}
           >
             {label}
           </button>
         ))}
       </nav>
+
+      {/* Keyed on `page` so the blurb and the content below it fade in together
+          when you switch tabs. */}
+      <p className="page-intro" key={page}>
+        {PAGES.find(([key]) => key === page)?.[2]}
+      </p>
 
       {page === "library" && (
         <Library user={user} onOpen={openFromLibrary} onSignIn={() => setShowAuth(true)} />
@@ -168,6 +196,11 @@ export default function App() {
                 </span>
                 <span className="dz-hint">wav · mp3 · flac · m4a · ogg</span>
               </label>
+              <p className="fine-print">
+                Works best on a clean solo recording of one instrument. Pick the
+                instrument below, then Transcribe — you’ll get a score you can
+                play, click through and download.
+              </p>
 
               <div className="controls">
                 {instrumentField("Instrument")}

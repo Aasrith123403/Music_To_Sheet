@@ -185,17 +185,22 @@ export function followAlong(osmd, audio, schedule, { container, onStep } = {}) {
     raf = requestAnimationFrame(tick);
   };
 
-  // rAF keeps the cursor smooth, but browsers freeze it in background tabs —
-  // `timeupdate` (and `seeked`) keep the score in step when the listener has
-  // switched away and comes back, or scrubs the audio.
+  // rAF keeps the cursor smooth, but browsers freeze it entirely in a hidden or
+  // background tab. <audio> also fires `timeupdate`, which covers that; the
+  // <midi-player> fallback fires neither, so rAF was its only driver and the
+  // cursor stuck wherever it was until the tab came back. A slow timer is the
+  // backstop for both: timers are throttled in the background, not stopped, so
+  // the cursor stays roughly in step and lands correctly on return.
   audio.addEventListener("timeupdate", update);
   audio.addEventListener("seeked", update);
+  const timer = setInterval(update, 100);
   raf = requestAnimationFrame(tick);
   update();
 
   return () => {
     stopped = true;
     cancelAnimationFrame(raf);
+    clearInterval(timer);
     audio.removeEventListener("timeupdate", update);
     audio.removeEventListener("seeked", update);
     try {

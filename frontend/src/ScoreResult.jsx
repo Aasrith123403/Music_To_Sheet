@@ -123,6 +123,7 @@ export default function ScoreResult({ job }) {
   const [lastNote, setLastNote] = useState(null);
   const [rate, setRate] = useState(1);
   const audioRef = useRef(null);
+  const midiRef = useRef(null);
   const scheduleRef = useRef([]);
   const detachRef = useRef(null);
   const stopFollowRef = useRef(null);
@@ -155,15 +156,26 @@ export default function ScoreResult({ job }) {
     };
   }, [ready, bpm, musicxmlUrl, osmdRef, containerRef]);
 
-  // Follow-along: drive the cursor from the audio element while it plays.
+  // Follow-along: drive the cursor from whichever transport is on screen.
+  //
+  // There are two: an <audio> element when the server rendered a WAV, and the
+  // <midi-player> web component when it couldn't. Both expose `currentTime` in
+  // seconds — all `followAlong` needs — but they signal playback differently,
+  // so only the event names are switched here. Binding to `audioRef` alone was
+  // why following worked locally (fluidsynth present, so a WAV existed) and
+  // silently did nothing in deployment (no WAV, so no <audio> to bind to).
   useEffect(() => {
-    const audio = audioRef.current;
+    const transport = audioRef.current || midiRef.current;
     const osmd = osmdRef.current;
-    if (!audio || !osmd || !ready || !follow) return undefined;
+    if (!transport || !osmd || !ready || !follow) return undefined;
+
+    const isMidi = !audioRef.current;
+    const startEvents = isMidi ? ["start"] : ["play"];
+    const stopEvents = isMidi ? ["stop"] : ["pause", "ended"];
 
     const start = () => {
       stopFollowRef.current?.();
-      stopFollowRef.current = followAlong(osmd, audio, scheduleRef.current, {
+      stopFollowRef.current = followAlong(osmd, transport, scheduleRef.current, {
         container: containerRef.current,
       });
     };
@@ -172,18 +184,17 @@ export default function ScoreResult({ job }) {
       stopFollowRef.current = null;
     };
 
-    audio.addEventListener("play", start);
-    audio.addEventListener("pause", stop);
-    audio.addEventListener("ended", stop);
-    if (!audio.paused) start();
+    startEvents.forEach((e) => transport.addEventListener(e, start));
+    stopEvents.forEach((e) => transport.addEventListener(e, stop));
+    // Already playing when the score finished rendering.
+    if (isMidi ? transport.playing : !transport.paused) start();
 
     return () => {
-      audio.removeEventListener("play", start);
-      audio.removeEventListener("pause", stop);
-      audio.removeEventListener("ended", stop);
+      startEvents.forEach((e) => transport.removeEventListener(e, start));
+      stopEvents.forEach((e) => transport.removeEventListener(e, stop));
       stop();
     };
-  }, [ready, follow, osmdRef, containerRef]);
+  }, [ready, follow, osmdRef, containerRef, audioUrl, midiUrl]);
 
   const baseName = (job.title || job.filename || "score").replace(/\.[^.]+$/, "");
 
@@ -230,6 +241,14 @@ export default function ScoreResult({ job }) {
                 Speed
                 <select
                   value={rate}
+                  // The MIDI fallback player has no rate control, so rather
+                  // than leave a dead dropdown it is disabled and says why.
+                  disabled={!audioUrl}
+                  title={
+                    audioUrl
+                      ? undefined
+                      : "Speed needs the server-rendered audio, which isn’t available for this score."
+                  }
                   onChange={(e) => {
                     const r = Number(e.target.value);
                     setRate(r);
@@ -261,7 +280,7 @@ export default function ScoreResult({ job }) {
           {audioUrl ? (
             <audio ref={audioRef} className="audio-player" controls src={audioUrl} />
           ) : (
-            <MidiPlayer src={midiUrl} />
+            <MidiPlayer ref={midiRef} src={midiUrl} />
           )}
         </div>
       )}
