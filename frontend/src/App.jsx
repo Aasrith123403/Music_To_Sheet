@@ -289,6 +289,12 @@ export default function App() {
         </>
       )}
 
+      <footer className="site-note">
+        You’re responsible for the audio you upload. Transcriptions are for
+        personal study — the underlying compositions may still be under
+        copyright.
+      </footer>
+
       {showAuth && (
         <AuthDialog
           googleEnabled={googleEnabled}
