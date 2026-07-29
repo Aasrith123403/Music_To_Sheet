@@ -1264,3 +1264,66 @@ code {
   text-align: center;
   color: var(--muted);
 }
+
+/* ---- floating transport shown while following the score ----
+   Fixed to the viewport so pause stays reachable no matter how far the cursor
+   has carried the page. */
+.follow-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 1.4rem;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1.1rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  box-shadow: 3px 3px 0 -1px var(--rule);
+  /* Its own keyframe, not the shared `rise`: that one ends on `transform: none`,
+     which with fill-mode `both` wiped out the centring translateX and left the
+     bar hanging off the right edge. */
+  animation: follow-bar-in 0.2s ease both;
+  max-width: calc(100vw - 2rem);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.follow-stop {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.follow-stop:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.follow-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--rule);
+}
+.follow-state {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .follow-bar { gap: 0.7rem; padding: 0.5rem 0.8rem; bottom: 0.8rem; }
+  .follow-state { display: none; }
+}
+
+@keyframes follow-bar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}

@@ -140,22 +140,40 @@ export function buildSchedule(osmd, bpm) {
 }
 
 /**
- * Drive the cursor from an <audio> element.
+ * Drive the cursor from an <audio> element or a <midi-player>.
  *
  * OSMD's cursor only steps forward, so seeking backwards means resetting and
  * replaying the steps — cheap, and it keeps scrubbing accurate.
- * Returns a stop function.
+ *
+ * Returns a handle: `{ stop, setAutoScroll }`. Auto-scroll releases itself the
+ * moment the listener scrolls by hand — see `onUserScroll` below.
  */
-export function followAlong(osmd, audio, schedule, { container, onStep } = {}) {
+export function followAlong(osmd, audio, schedule, { container, onStep, onAutoScroll } = {}) {
   const cursor = osmd?.cursor;
-  if (!cursor || !audio || !schedule.length) return () => {};
+  if (!cursor || !audio || !schedule.length) {
+    return { stop: () => {}, setAutoScroll: () => {} };
+  }
 
   let index = -1;
   let raf = 0;
   let stopped = false;
+  let autoScroll = true;
 
   cursor.reset();
   cursor.show();
+
+  // Following must never trap the reader. The transport controls sit above the
+  // score, so once the page scrolled down to the cursor they were off-screen —
+  // and scrolling back up was undone by the very next cursor step, which made
+  // it impossible to pause. Any manual scroll now hands control back to the
+  // reader; the floating bar can re-engage it deliberately.
+  const onUserScroll = () => {
+    if (!autoScroll || stopped) return;
+    autoScroll = false;
+    onAutoScroll?.(false);
+  };
+  window.addEventListener("wheel", onUserScroll, { passive: true });
+  window.addEventListener("touchmove", onUserScroll, { passive: true });
 
   const moveTo = (target) => {
     if (target === index) return;
@@ -167,7 +185,7 @@ export function followAlong(osmd, audio, schedule, { container, onStep } = {}) {
       for (let i = index < 0 ? 0 : index; i < target; i++) cursor.next();
     }
     index = target;
-    scrollCursorIntoView(cursor, container);
+    scrollCursorIntoView(cursor, container, { page: autoScroll });
     onStep?.(target, schedule[target]);
   };
 
@@ -197,22 +215,39 @@ export function followAlong(osmd, audio, schedule, { container, onStep } = {}) {
   raf = requestAnimationFrame(tick);
   update();
 
-  return () => {
+  const stop = () => {
     stopped = true;
     cancelAnimationFrame(raf);
     clearInterval(timer);
     audio.removeEventListener("timeupdate", update);
     audio.removeEventListener("seeked", update);
+    window.removeEventListener("wheel", onUserScroll);
+    window.removeEventListener("touchmove", onUserScroll);
     try {
       cursor.hide();
     } catch {
       /* already gone */
     }
   };
+
+  return {
+    stop,
+    /** Re-engage (or drop) page-following; turning it on jumps to the cursor. */
+    setAutoScroll(on) {
+      autoScroll = !!on;
+      onAutoScroll?.(autoScroll);
+      if (autoScroll) scrollCursorIntoView(cursor, container, { page: true });
+    },
+  };
 }
 
-/** Keep the cursor visible without yanking the whole page around. */
-export function scrollCursorIntoView(cursor, container) {
+/**
+ * Keep the cursor visible without yanking the whole page around.
+ *
+ * `page: false` restricts this to the score's own horizontal scrollbox, which
+ * keeps the music readable without moving the document under the reader.
+ */
+export function scrollCursorIntoView(cursor, container, { page = true } = {}) {
   const el = cursor?.cursorElement;
   if (!el || !container) return;
   const c = container.getBoundingClientRect();
@@ -221,8 +256,14 @@ export function scrollCursorIntoView(cursor, container) {
   if (e.left < c.left + 40 || e.right > c.right - 40) {
     container.scrollLeft += e.left - c.left - c.width / 3;
   }
-  // Vertical: only scroll the page when the cursor has left the viewport.
-  if (e.top < 0 || e.bottom > window.innerHeight) {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Vertical: only scroll the page when the cursor has left the viewport, and
+  // jump rather than animate. A smooth scroll cannot be cancelled once started,
+  // so it kept travelling to its target after the reader scrolled away and
+  // dragged the page back out from under them — the exact behaviour that made
+  // it impossible to reach the controls. An instant move also reads better
+  // mid-playback than a half-second glide.
+  if (page && (e.top < 0 || e.bottom > window.innerHeight)) {
+    const top = window.scrollY + e.top - window.innerHeight / 2 + e.height / 2;
+    window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
   }
 }

@@ -43,7 +43,13 @@ function useOsmd(musicxmlUrl) {
           drawTitle: true,
           drawPartNames: false,
           backend: "svg",
-          followCursor: true,
+          // OSMD's own cursor-following scrolls the page on every `cursor.next()`
+          // and offers no way to suspend it, which pinned the reader to the
+          // cursor: the transport controls sit above the score, so they scrolled
+          // out of reach and scrolling back was undone by the next note. We do
+          // the scrolling ourselves in `scrollCursorIntoView`, which yields as
+          // soon as the reader scrolls by hand.
+          followCursor: false,
         });
         osmdRef.current = osmd;
         await osmd.load(xml);
@@ -122,6 +128,9 @@ export default function ScoreResult({ job }) {
   const [follow, setFollow] = useState(true);
   const [lastNote, setLastNote] = useState(null);
   const [rate, setRate] = useState(1);
+  // Playback state, surfaced so the floating bar can appear while following.
+  const [playing, setPlaying] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
   const audioRef = useRef(null);
   const midiRef = useRef(null);
   const scheduleRef = useRef([]);
@@ -174,14 +183,18 @@ export default function ScoreResult({ job }) {
     const stopEvents = isMidi ? ["stop"] : ["pause", "ended"];
 
     const start = () => {
-      stopFollowRef.current?.();
+      stopFollowRef.current?.stop();
+      setAutoScroll(true);
+      setPlaying(true);
       stopFollowRef.current = followAlong(osmd, transport, scheduleRef.current, {
         container: containerRef.current,
+        onAutoScroll: setAutoScroll,
       });
     };
     const stop = () => {
-      stopFollowRef.current?.();
+      stopFollowRef.current?.stop();
       stopFollowRef.current = null;
+      setPlaying(false);
     };
 
     startEvents.forEach((e) => transport.addEventListener(e, start));
@@ -205,6 +218,12 @@ export default function ScoreResult({ job }) {
     } finally {
       setPdfBusy(false);
     }
+  }
+
+  /** Halt playback from anywhere on the page. */
+  function pausePlayback() {
+    if (audioRef.current) audioRef.current.pause();
+    else midiRef.current?.stop();
   }
 
   /** Step the cursor by hand and sound whatever is under it. */
@@ -332,6 +351,31 @@ export default function ScoreResult({ job }) {
         {error && <div className="score-error">{error}</div>}
         <div className="score" ref={containerRef} />
       </div>
+
+      {/* Floating transport. The real controls live above the score, so once
+          following scrolled the page down they were out of reach and there was
+          no way to stop the audio. This stays put. */}
+      {playing && follow && (
+        <div className="follow-bar" role="toolbar" aria-label="Playback">
+          <button className="follow-stop" onClick={pausePlayback} aria-label="Pause">
+            ❚❚ Pause
+          </button>
+          <span className="follow-sep" />
+          {autoScroll ? (
+            <span className="follow-state">Following the score</span>
+          ) : (
+            <button
+              className="link-btn"
+              onClick={() => stopFollowRef.current?.setAutoScroll(true)}
+            >
+              ↻ Re-centre
+            </button>
+          )}
+          <button className="link-btn" onClick={() => setFollow(false)}>
+            Stop following
+          </button>
+        </div>
+      )}
     </>
   );
 }
